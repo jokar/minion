@@ -9,7 +9,6 @@ log = commonware.log.getLogger('playdoh')
 #Function called from settings page which prevents user account creation if email not from accepted domain
 def create_user(email):
     domain = email.rsplit('@', 1)[1]
-    for i, v in enumerate(settings.ACCEPTED_USER_DOMAINS):
-        if domain == v:
+    if domain in settings.ACCEPTED_USER_DOMAINS:
             return User.objects.create_user(email, email)
             #log.debug("WOULD HAVE added user from " + domain)
