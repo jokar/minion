@@ -1,19 +1,20 @@
 ========================================
-Welcome to this project's documentation!
+Welcome to the Minion Documentation!
 ========================================
 
-This is a documentation template for a **web application based on Playdoh**.
-Feel free to change this to your liking.
+This is the documentation for **Minion, the security scanning framework**.
 
 
-About playdoh
+About Minion
 -------------
 
-This project is based on **playdoh**. Mozilla's Playdoh is an open source
+Minion is a security testing framework built by Mozilla to brdige the gap between developers
+and security testers. To do so, it enables developers to scan their projects using a friendly
+interface.
+
+The web part of this project is based on **playdoh**. Mozilla's Playdoh is an open source
 web application template based on `Django <http://www.djangoproject.com/>`_.
 
-To learn more about it, step by the `playdoh project page
-<https://github.com/mozilla/playdoh>`_.
 
 Contents
 --------
