@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html LANG="{{ LANG }}" dir="{{ DIR }}">
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type">
+    <title>{% block page_title %}Minion Security Scanner{% endblock %}</title>
+
+    {% block site_css %}
+      {% compress css %}
+      <link href="{{ static('scanner/css/main.css') }}" rel="stylesheet">
+      {% endcompress %}
+      <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300' rel='stylesheet' type='text/css'>
+    {% endblock %}
+  </head>
+  
+  
+  <body>
+    <div id="main_page">
+      {% block header %}
+        <div id="header_bar">
+          <div class="center_1000">
+            <div id="logo_and_text">
+              <a href="/">{{ _('minion') }}</a>
+            </div>
+            {% if request.user.is_active %}
+              <div id="welcome_user">{{ _('Welcome, {username}')|f(username=request.user) }} | 
+              <a href="{{ url('scanner.logout') }}">{{ _('Log out') }}</a></div>
+            {% else %}
+              <div id="login_button"><a id="browserid" href="#"><img src="{{ static('scanner/img/sign_in_grey.png') }}"/></a></div>
+              <form method="POST" action="{{ url('browserid_verify') }}">
+                  {{ csrf() }}
+                  {{ browserid_form.as_p() }}
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endblock %}
+      <div id="small_under_bar">
+        <div class="center_1000">
+          {% block under_bar_content %}{% endblock %}
+        </div>
+      </div>
+      
+      {% if request.user.is_active %}
+        {# The user is logged in, display their homepage #}
+        <div id="lighter_box">
+            <div class="center_1000">
+                <div id="menu">
+                    <ul>
+                        <li>Home</li>
+                        <li>New Scan</li>
+                        <li>My Projects</li>
+                        <li>My Group Projects</li>
+                        <li>My Account</li>
+                    </ul>
+                </div>
+                <div id="main_content">
+                  {% block content %}{% endblock %}
+                </div>
+                <br style="clear: both;"/>
+            </div>
+        </div>
+        
+    {% else %}
+        {# The user is not logged in, display the login page #}
+        <div id="lighter_box">
+            <div class="center_1000">
+                <div id="please_sign_in">
+                    Please sign-in using BrowserID with an allowed domain.
+                </div>
+            </div>
+        </div>
+    {% endif %}
+        
+      <div id="footer" class="center_1000">
+        Produced by Mozilla Security.<br/>
+        Minion is open-source software.
+        {% block footer %}{% endblock %}
+      </div>
+  
+      {% block site_js %}
+        {{ js('example_js') }}
+      {% endblock %}
+    </div>
+  </body>
+</html>
