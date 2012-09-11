@@ -53,7 +53,7 @@ def test_invalid_href_attr():
 
 def test_invalid_filter_attr():
     IMG = ['img', ]
-    IMG_ATTR = {'img': lambda name, val: name == 'src' and val == "http://example.com/"}
+    IMG_ATTR = {'img': lambda n, v: n == 'src' and v == "http://example.com/"}
 
     eq_('<img src="http://example.com/">',
         clean('<img onclick="evil" src="http://example.com/" />',
@@ -85,3 +85,24 @@ def test_strip():
     eq_('pt&gt;alert(1)ipt&gt;', clean(s, strip=True))
     s = '<scri<scri<script>pt>pt>alert(1)</script>'
     eq_('pt&gt;pt&gt;alert(1)', clean(s, strip=True))
+
+
+def test_nasty():
+    """Nested, broken up, multiple tags, are still foiled!"""
+    test = ('<scr<script></script>ipt type="text/javascript">alert("foo");</'
+            '<script></script>script<del></del>>')
+    expect = (u'&lt;scr&lt;script&gt;&lt;/script&gt;ipt type="text/javascript"'
+              u'&gt;alert("foo");&lt;/script&gt;script&lt;del&gt;&lt;/del&gt;'
+              u'&gt;')
+    eq_(expect, clean(test))
+
+
+def test_poster_attribute():
+    """Poster attributes should not allow javascript."""
+    tags = ['video']
+    attrs = {'video': ['poster']}
+    test = '<video poster="javascript:alert(1)"></video>'
+    expect = '<video></video>'
+    eq_(expect, clean(test, tags=tags, attributes=attrs))
+    ok = '<video poster="/foo.png"></video>'
+    eq_(ok, clean(ok, tags=tags, attributes=attrs))

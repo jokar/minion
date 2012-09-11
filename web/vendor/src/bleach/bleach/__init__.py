@@ -1,14 +1,19 @@
+import itertools
 import logging
 import re
+import sys
+import urlparse
 
 import html5lib
+from html5lib.sanitizer import HTMLSanitizer
 from html5lib.serializer.htmlserializer import HTMLSerializer
 
 from encoding import force_unicode
 from sanitizer import BleachSanitizer
 
 
-__version__ = '1.0.2'
+VERSION = (1, 1, 5)
+__version__ = '.'.join(map(str, VERSION))
 
 __all__ = ['clean', 'linkify']
 
@@ -53,22 +58,28 @@ TLDS = """ac ad ae aero af ag ai al am an ao aq ar arpa as asia at au aw ax az
 
 TLDS.reverse()
 
-url_re = re.compile(r"""\b(?<![@.])(?:\w[\w-]*:/{0,3}(?:(?:\w+:)?\w+@)?)?
-                                                                      # http://
-                    ([\w-]+\.)+(?:%s)(?!\.\w)\b   # xx.yy.tld
-                    (?:[/?][^\s\{\}\|\\\^\[\]`<>"\x80-\xFF\x00-\x1F\x7F]*)?
-                        # /path/zz (excluding "unsafe" chars from RFC 1738,
-                        # except for # and ~, which happen in practice)
-                    """ % u'|'.join(TLDS),
-                    re.VERBOSE)
+url_re = re.compile(
+    r"""\(*  # Match any opening parentheses.
+    \b(?<![@.])(?:\w[\w-]*:/{0,3}(?:(?:\w+:)?\w+@)?)?  # http://
+    ([\w-]+\.)+(?:%s)(?:\:\d+)?(?!\.\w)\b   # xx.yy.tld(:##)?
+    (?:[/?][^\s\{\}\|\\\^\[\]`<>"]*)?
+        # /path/zz (excluding "unsafe" chars from RFC 1738,
+        # except for # and ~, which happen in practice)
+    """ % u'|'.join(TLDS), re.VERBOSE | re.UNICODE)
 
 proto_re = re.compile(r'^[\w-]+:/{0,3}')
 
+punct_re = re.compile(r'([\.,]+)$')
+
 email_re = re.compile(
-    r"(?<!//)"
-    r"(([-!#$%&'*+/=?^_`{}|~0-9A-Z]+(\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*"  # dot-atom
-    r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]|\\[\001-011\013\014\016-\177])*"' # quoted-string
-    r')@(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6})\.?', flags=re.I|re.M)  # domain
+    r"""(?<!//)
+    (([-!#$%&'*+/=?^_`{}|~0-9A-Z]+
+        (\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*  # dot-atom
+    |^"([\001-\010\013\014\016-\037!#-\[\]-\177]
+        |\\[\001-011\013\014\016-\177])*"  # quoted-string
+    )@(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6})\.?  # domain
+    """,
+    re.IGNORECASE | re.MULTILINE | re.VERBOSE)
 
 NODE_TEXT = 4  # The numeric ID of a text node in simpletree.
 
@@ -80,7 +91,9 @@ def clean(text, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES,
     """Clean an HTML fragment and return it"""
     if not text:
         return u''
-    elif text.startswith('<!--'):
+
+    text = force_unicode(text)
+    if text.startswith(u'<!--'):
         text = u' ' + text
 
     class s(BleachSanitizer):
@@ -92,11 +105,12 @@ def clean(text, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES,
 
     parser = html5lib.HTMLParser(tokenizer=s)
 
-    return _render(parser.parseFragment(text), text).strip()
+    return _render(parser.parseFragment(text)).strip()
 
 
-def linkify(text, nofollow=True, filter_url=identity,
-            filter_text=identity, skip_pre=False, parse_email=False):
+def linkify(text, nofollow=True, target=None, filter_url=identity,
+            filter_text=identity, skip_pre=False, parse_email=False,
+            tokenizer=HTMLSanitizer):
     """Convert URL-like strings in an HTML fragment to links.
 
     linkify() converts strings that look like URLs or domain names in a
@@ -108,22 +122,27 @@ def linkify(text, nofollow=True, filter_url=identity,
     will be added to links created by linkify() as well as links already
     found in the text.
 
+    The target argument will optionally add a target attribute with the
+    given value to links created by linkify() as well as links already
+    found in the text.
+
     linkify() uses up to two filters on each link. For links created by
     linkify(), the href attribute is passed through filter_url()
     and the text of the link is passed through filter_text(). For links
     already found in the document, the href attribute is passed through
     filter_url(), but the text is untouched.
     """
+    text = force_unicode(text)
 
     if not text:
         return u''
 
-    parser = html5lib.HTMLParser()
+    parser = html5lib.HTMLParser(tokenizer=tokenizer)
 
     forest = parser.parseFragment(text)
 
     if nofollow:
-        rel = u' rel="nofollow"'
+        rel = u'rel="nofollow"'
     else:
         rel = u''
 
@@ -133,6 +152,48 @@ def linkify(text, nofollow=True, filter_url=identity,
             tree.insertBefore(n, node)
         tree.removeChild(node)
 
+    def strip_wrapping_parentheses(fragment):
+        """Strips wrapping parentheses.
+
+        Returns a tuple of the following format::
+
+            (string stripped from wrapping parentheses,
+             count of stripped opening parentheses,
+             count of stripped closing parentheses)
+        """
+        opening_parentheses = closing_parentheses = 0
+        # Count consecutive opening parentheses
+        # at the beginning of the fragment (string).
+        for char in fragment:
+            if char == '(':
+                opening_parentheses += 1
+            else:
+                break
+
+        if opening_parentheses:
+            newer_frag = ''
+            # Cut the consecutive opening brackets from the fragment.
+            fragment = fragment[opening_parentheses:]
+            # Reverse the fragment for easier detection of parentheses
+            # inside the URL.
+            reverse_fragment = fragment[::-1]
+            skip = False
+            for char in reverse_fragment:
+                # Remove the closing parentheses if it has a matching
+                # opening parentheses (they are balanced).
+                if (char == ')' and
+                        closing_parentheses < opening_parentheses and
+                        not skip):
+                    closing_parentheses += 1
+                    continue
+                # Do not remove ')' from the URL itself.
+                elif char != ')':
+                    skip = True
+                newer_frag += char
+            fragment = newer_frag[::-1]
+
+        return fragment, opening_parentheses, closing_parentheses
+
     def linkify_nodes(tree, parse_text=True):
         for node in tree.childNodes:
             if node.type == NODE_TEXT and parse_text:
@@ -141,7 +202,7 @@ def linkify(text, nofollow=True, filter_url=identity,
                     new_frag = re.sub(email_re, email_repl, new_frag)
                     if new_frag != node.toxml():
                         replace_nodes(tree, new_frag, node)
-                        linkify_nodes(tree, False)
+                        linkify_nodes(tree)
                         continue
                 new_frag = re.sub(url_re, link_repl, new_frag)
                 replace_nodes(tree, new_frag, node)
@@ -149,6 +210,8 @@ def linkify(text, nofollow=True, filter_url=identity,
                 if 'href' in node.attributes:
                     if nofollow:
                         node.attributes['rel'] = 'nofollow'
+                    if target is not None:
+                        node.attributes['target'] = target
                     href = node.attributes['href']
                     node.attributes['href'] = filter_url(href)
             elif skip_pre and node.name == 'pre':
@@ -162,30 +225,112 @@ def linkify(text, nofollow=True, filter_url=identity,
 
     def link_repl(match):
         url = match.group(0)
+        open_brackets = close_brackets = 0
+        if url.startswith('('):
+            url, open_brackets, close_brackets = (
+                    strip_wrapping_parentheses(url)
+            )
+        end = u''
+        m = re.search(punct_re, url)
+        if m:
+            end = m.group(0)
+            url = url[0:m.start()]
         if re.search(proto_re, url):
             href = url
         else:
-            href = u''.join(['http://', url])
+            href = u''.join([u'http://', url])
 
-        repl = u'<a href="%s"%s>%s</a>'
+        repl = u'%s<a href="%s" %s>%s</a>%s%s'
 
-        return repl % (filter_url(href), rel, filter_text(url))
+        attribs = [rel]
+        if target is not None:
+            attribs.append('target="%s"' % target)
+
+        return repl % ('(' * open_brackets,
+                       filter_url(href), ' '.join(attribs), filter_text(url),
+                       end, ')' * close_brackets)
 
     linkify_nodes(forest)
 
-    return _render(forest, text)
+    return _render(forest)
 
 
-def _render(tree, source):
+def delinkify(text, allow_domains=None, allow_relative=False):
+    """Remove links from text, except those allowed to stay."""
+    text = force_unicode(text)
+    if not text:
+        return u''
+
+    parser = html5lib.HTMLParser(tokenizer=HTMLSanitizer)
+    forest = parser.parseFragment(text)
+
+    if allow_domains is None:
+        allow_domains = []
+    elif isinstance(allow_domains, basestring):
+        allow_domains = [allow_domains]
+
+    def delinkify_nodes(tree):
+        """Remove <a> tags and replace them with their contents."""
+        for node in tree.childNodes:
+            if node.name == 'a':
+                if 'href' not in node.attributes:
+                    continue
+                parts = urlparse.urlparse(node.attributes['href'])
+                host = parts.hostname
+                if any(_domain_match(host, d) for d in allow_domains):
+                    continue
+                if host is None and allow_relative:
+                    continue
+                # Replace the node with its children.
+                # You can't nest <a> tags, and html5lib takes care of that
+                # for us in the tree-building step.
+                for n in node.childNodes:
+                    tree.insertBefore(n, node)
+                tree.removeChild(node)
+            elif node.type != NODE_TEXT: # Don't try to delinkify text.
+                delinkify_nodes(node)
+
+    delinkify_nodes(forest)
+    return _render(forest)
+
+
+def _domain_match(test, compare):
+    test = test.lower()
+    compare = compare.lower()
+    if '*' not in compare:
+        return test == compare
+    c = compare.split('.')[::-1]
+    if '**' in c and (c.count('**') > 1 or not compare.startswith('**')):
+        raise ValidationError(
+            'Only 1 ** is allowed, and must start the domain.')
+    t = test.split('.')[::-1]
+    z = itertools.izip_longest(c, t)
+    for c, t in z:
+        if c == t:
+            continue
+        elif c == '*':
+            continue
+        elif c == '**':
+            return True
+        return False
+    # Got all the way through and everything matched.
+    return True
+
+
+class ValidationError(ValueError):
+    pass
+
+
+def _render(tree):
     """Try rendering as HTML, then XML, then give up."""
     try:
         return force_unicode(_serialize(tree))
     except Exception, e:
-        log.error('HTML: %r ::: %r' % (e, source))
+        log.error('HTML: %r' % e, exc_info=sys.exc_info())
         try:
             return force_unicode(tree.toxml())
         except Exception, e:
-            log.error('XML: %r ::: %r' % (e, source))
+            log.error('XML: %r' % e, exc_info=sys.exc_info())
             return u''
 
 

@@ -1,5 +1,6 @@
 import urllib
 
+from html5lib.tokenizer import HTMLTokenizer
 from nose.tools import eq_
 
 from bleach import linkify, url_re
@@ -211,5 +212,101 @@ def test_libgl():
 
 def test_end_of_sentence():
     """example.com. should match."""
-    eq_('<a href="http://example.com" rel="nofollow">example.com</a>.',
-        linkify('example.com.'))
+    out = u'<a href="http://%s" rel="nofollow">%s</a>%s'
+    in_ = u'%s%s'
+
+    def check(u, p):
+        eq_(out % (u, u, p), linkify(in_ % (u, p)))
+
+    tests = (
+        ('example.com', '.'),
+        ('example.com', '...'),
+        ('ex.com/foo', '.'),
+        ('ex.com/foo', '....'),
+    )
+
+    for u, p in tests:
+        yield check, u, p
+
+
+def test_end_of_clause():
+    """example.com/foo, shouldn't include the ,"""
+    eq_('<a href="http://ex.com/foo" rel="nofollow">ex.com/foo</a>, bar',
+        linkify('ex.com/foo, bar'))
+
+
+def test_sarcasm():
+    """Jokes should crash.<sarcasm/>"""
+    dirty = u'Yeah right <sarcasm/>'
+    clean = u'Yeah right &lt;sarcasm/&gt;'
+    eq_(clean, linkify(dirty))
+
+
+def test_wrapping_parentheses():
+    """URLs wrapped in parantheses should not include them."""
+    out = u'%s<a href="http://%s" rel="nofollow">%s</a>%s'
+
+    tests = (
+        ('(example.com)', out % ('(', 'example.com', 'example.com', ')')),
+        ('(example.com/)', out % ('(', 'example.com/', 'example.com/', ')')),
+        ('(example.com/foo)', out % ('(', 'example.com/foo',
+                                     'example.com/foo', ')')),
+        ('(((example.com/))))', out % ('(((', 'example.com/)',
+                                       'example.com/)', ')))')),
+        ('example.com/))', out % ('', 'example.com/))',
+                                  'example.com/))', '')),
+        ('http://en.wikipedia.org/wiki/Test_(assessment)',
+            out % ('', 'en.wikipedia.org/wiki/Test_(assessment)',
+                   'http://en.wikipedia.org/wiki/Test_(assessment)', '')),
+        ('(http://en.wikipedia.org/wiki/Test_(assessment))',
+            out % ('(', 'en.wikipedia.org/wiki/Test_(assessment)',
+                   'http://en.wikipedia.org/wiki/Test_(assessment)', ')')),
+        ('((http://en.wikipedia.org/wiki/Test_(assessment))',
+            out % ('((', 'en.wikipedia.org/wiki/Test_(assessment',
+                   'http://en.wikipedia.org/wiki/Test_(assessment', '))')),
+        ('(http://en.wikipedia.org/wiki/Test_(assessment)))',
+            out % ('(', 'en.wikipedia.org/wiki/Test_(assessment))',
+                   'http://en.wikipedia.org/wiki/Test_(assessment))', ')')),
+        ('(http://en.wikipedia.org/wiki/)Test_(assessment',
+            out % ('(', 'en.wikipedia.org/wiki/)Test_(assessment',
+                   'http://en.wikipedia.org/wiki/)Test_(assessment', '')),
+    )
+
+    def check(test, expected_output):
+        eq_(expected_output, linkify(test))
+
+    for test, expected_output in tests:
+        yield check, test, expected_output
+
+
+def test_ports():
+    """URLs can contain port numbers."""
+    tests = (
+        ('http://foo.com:8000', ('http://foo.com:8000', '')),
+        ('http://foo.com:8000/', ('http://foo.com:8000/', '')),
+        ('http://bar.com:xkcd', ('http://bar.com', ':xkcd')),
+        ('http://foo.com:81/bar', ('http://foo.com:81/bar', '')),
+        ('http://foo.com:', ('http://foo.com', ':')),
+    )
+
+    def check(test, output):
+        eq_(u'<a href="{0}" rel="nofollow">{0}</a>{1}'.format(*output),
+            linkify(test))
+
+    for test, output in tests:
+        yield check, test, output
+
+
+def test_target():
+    eq_('<a href="http://example.com" rel="nofollow" '
+        'target="_blank">example.com</a>',
+        linkify(u'example.com', target='_blank'))
+    eq_('<a href="http://example.com" target="_blank">example.com</a>',
+        linkify(u'example.com', target='_blank', nofollow=False))
+
+
+def test_tokenizer():
+    """Linkify doesn't always have to sanitize."""
+    raw = '<em>test<x></x></em>'
+    eq_('<em>test&lt;x&gt;&lt;/x&gt;</em>', linkify(raw))
+    eq_(raw, linkify(raw, tokenizer=HTMLTokenizer))

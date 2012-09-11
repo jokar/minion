@@ -10,6 +10,8 @@ class BleachSanitizerMixin(HTMLSanitizerMixin):
     """Mixin to replace sanitize_token() and sanitize_css()."""
 
     allowed_svg_properties = []
+    # TODO: When the next html5lib version comes out, nuke this.
+    attr_val_is_uri = HTMLSanitizerMixin.attr_val_is_uri + ['poster']
 
     def sanitize_token(self, token):
         """Sanitize a token either by HTML-encoding or dropping.
@@ -23,6 +25,9 @@ class BleachSanitizerMixin(HTMLSanitizerMixin):
         Also gives the option to strip tags instead of encoding.
 
         """
+        if (getattr(self, 'wildcard_attributes', None) is None and
+            isinstance(self.allowed_attributes, dict)):
+            self.wildcard_attributes = self.allowed_attributes.get('*', [])
 
         if token['type'] in (tokenTypes['StartTag'], tokenTypes['EndTag'],
                              tokenTypes['EmptyTag']):
@@ -31,11 +36,13 @@ class BleachSanitizerMixin(HTMLSanitizerMixin):
                     if isinstance(self.allowed_attributes, dict):
                         allowed_attributes = self.allowed_attributes.get(
                             token['name'], [])
+                        if not callable(allowed_attributes):
+                            allowed_attributes += self.wildcard_attributes
                     else:
                         allowed_attributes = self.allowed_attributes
                     attrs = dict([(name, val) for name, val in
                                   token['data'][::-1]
-                                  if (allowed_attributes(name, val) 
+                                  if (allowed_attributes(name, val)
                                       if callable(allowed_attributes)
                                       else name in allowed_attributes)])
                     for attr in self.attr_val_is_uri:
@@ -98,10 +105,15 @@ class BleachSanitizerMixin(HTMLSanitizerMixin):
         style = re.compile('url\s*\(\s*[^\s)]+?\s*\)\s*').sub(' ', style)
 
         # gauntlet
-        if not re.match("""^([:,;#%.\sa-zA-Z0-9!]|\w-\w|'[\s\w]+"""
-                        """'|"[\s\w]+"|\([\d,\s]+\))*$""",
-                        style):
-            return ''
+        # TODO: Make sure this does what it's meant to - I *think* it wants to
+        # validate style attribute contents.
+        parts = style.split(';')
+        gauntlet = re.compile("""^([-/:,#%.'\sa-zA-Z0-9!]|\w-\w|'[\s\w]+'\s*"""
+                              """|"[\s\w]+"|\([\d,%\.\s]+\))*$""")
+        for part in parts:
+            if not gauntlet.match(part):
+                return ''
+
         if not re.match("^\s*([-\w]+\s*:[^:;]*(;\s*|$))*$", style):
             return ''
 
@@ -119,9 +131,10 @@ class BleachSanitizerMixin(HTMLSanitizerMixin):
 
 class BleachSanitizer(HTMLTokenizer, BleachSanitizerMixin):
     def __init__(self, stream, encoding=None, parseMeta=True, useChardet=True,
-                 lowercaseElementName=True, lowercaseAttrName=True):
+                 lowercaseElementName=True, lowercaseAttrName=True, **kwargs):
         HTMLTokenizer.__init__(self, stream, encoding, parseMeta, useChardet,
-                               lowercaseElementName, lowercaseAttrName)
+                               lowercaseElementName, lowercaseAttrName,
+                               **kwargs)
 
     def __iter__(self):
         for token in HTMLTokenizer.__iter__(self):
