@@ -1,0 +1,7 @@
+# These are the reqs to build docs and run tests.
+sphinx
+jinja2
+nose
+mock
+Django==1.3
+fabric
