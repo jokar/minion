@@ -16,11 +16,15 @@ log = commonware.log.getLogger('playdoh')
 
 @mobile_template('scanner/{mobile/}home.html')
 def home(request, template=None):
-    """Main example view."""
+    """Home main view"""
     data = {}  # You'd add data here that you're sending to the template.
-    log.debug("I'm alive!")
     return render(request, template, data)
 
+@mobile_template('scanner/{mobile/}newscan.html')
+def newscan(request, template=None):
+    """Initiating a new scan"""
+    data = {}  # You'd add data here that you're sending to the template.
+    return render(request, template, data)
 
 @anonymous_csrf
 def bleach_test(request):

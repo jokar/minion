@@ -127,6 +127,28 @@ a:visited { color: #2D87CA; text-decoration: none; }
     float: left;
     margin-left: 10px;
     max-width: 785px;
+    width: 100%;
+}
+
+/* NEW SCAN PAGE CONTENT */
+#new_scan_enter_url {
+    margin-top: 10px;
+    text-align: center;
+    width: 100%;
+}
+
+#new_scan_url_input {
+    width: 80%;
+    font-size: 20px;
+    border: 1px solid #BDC2C5;
+}
+
+#new_scan_advanced_options_expander {
+    margin-top: 40px;
+    font-size: small;
+    background: url('../img/icon_expand.gif');
+    background-repeat: no-repeat;
+    padding-left: 15px;
 }
 
 /* FOOTER STYLES */

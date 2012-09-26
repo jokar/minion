@@ -1,0 +1,31 @@
+{% extends "scanner_base.html" %}
+
+{% block content %}
+    <h1>New Scan</h1>
+    <form method="POST" action="">
+        <div id="new_scan_enter_url">
+            <input id="new_scan_url_input" type="text" placeholder="Enter URL to scan..."/><br/>
+            Start Scan
+        </div>
+        <div id="new_scan_advanced_options">
+            <div id="new_scan_advanced_options_expander">
+                Additional Options
+            </div>
+        </div>
+    </form>
+{% endblock %}
+
+{% block footer %}
+    
+{% endblock %}
+
+{% block site_js %}
+    {% compress js %}
+    <script src="{{ static('scanner/js/libs/jquery-1.4.4.min.js') }}"></script>
+    <script src="{{ static('scanner/js/libs/jquery.cookie.js') }}"></script>
+    <script src="{{ static('scanner/js/init.js') }}"></script>
+    {% endcompress %}
+    {% if not request.user.is_active %}
+        {{ browserid_form.media }}
+    {% endif %}
+{% endblock %}

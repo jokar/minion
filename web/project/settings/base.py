@@ -36,7 +36,7 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-SITE_URL = 'http://33.33.33.24:8000'
+SITE_URL = ''
 LOGIN_URL = '/'
 LOGIN_REDIRECT_URL = 'scanner.home'
 LOGIN_REDIRECT_URL_FAILURE = 'scanner.home'
