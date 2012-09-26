@@ -4,11 +4,11 @@ Created on 25 Sep 2012
 @author: test
 '''
 import unittest
+from TaskEngine import TaskEngine, TaskEngineError
 from PluginService import PluginService, PluginServiceError
 from MinionPlugin import MinionPlugin
 
-
-class PluginServiceTestCase(unittest.TestCase):
+class TaskEngineTestCase(unittest.TestCase):
 
 
     def setUp(self):
@@ -19,36 +19,48 @@ class PluginServiceTestCase(unittest.TestCase):
         pass
 
 
-    def testBasicSessionManagement(self):
-        service = PluginService("Test")
+    def testPluginServiceManagement(self):
+        te = TaskEngine()
         
-        ''' Basic info'''
-        result = service.get_info()
-        if (result["name"] is not "Test"):
+        ''' Check no services to start with '''
+        result = te.get_plugin_services()
+        if (len(result["plugin_services"]) is not 0):
+            self.fail("Unexpected number of plugin services returned %s" % result)
+            
+        service_name = "TestService1"
+            
+        ''' Add a services to start with '''
+        te.add_plugin_service(PluginService(service_name))
+        result = te.get_plugin_services()
+        if (len(result) is not 1):
+            self.fail("Unexpected number of plugin services returned %s" % result)
+        if (result["plugin_services"][0]["name"] is not service_name):
             self.fail("Unexpected name returned %s" % result)
-        if (result["version"] is not 1):
+        if (result["plugin_services"][0]["version"] is not 1):
             self.fail("Unexpected version returned %s" % result)
         
         ''' Should get a set of empty sessions'''
-        result = service.get_sessions()
+        result = te.get_plugin_service_sessions(service_name)
         if (result is None or "sessions" not in result):
             self.fail("No sessions returned %s" % result)
+        if (len(result["sessions"]) != 0):
+            self.fail("Unexpected number of sessions returned %s" % result)
             
         ''' start a valid session '''
-        result = service.create_session("TemplatePlugin")
+        result = te.create_plugin_service_session(service_name, "TemplatePlugin")
         if (result is None or "session" not in result):
             self.fail("Failed to start session %s" % result)
         session = result["session"]
             
         ''' start an invalid session (no such plugin)'''
         try:
-            service.create_session("BadPlugin")
+            te.create_plugin_service_session(service_name, "BadPlugin")
             self.fail("Successfully started a bad session %s" % result)
         except PluginServiceError:
             pass
             
         ''' Should get a set with one session in'''
-        result = service.get_sessions()
+        result = te.get_plugin_service_sessions(service_name)
         if (result is None or "sessions" not in result):
             self.fail("No sessions returned %s" % result)
         if (len(result["sessions"]) != 1):
@@ -59,56 +71,61 @@ class PluginServiceTestCase(unittest.TestCase):
         pass
 
     def testSessionStateManagement(self):
-        service = PluginService("Test")
+        te = TaskEngine()
+
+        service_name = "TestService1"
+            
+        ''' Add a services to start with '''
+        te.add_plugin_service(PluginService(service_name))
 
         ''' start a valid session '''
-        result = service.create_session("TemplatePlugin")
+        result = te.create_plugin_service_session(service_name, "TemplatePlugin")
         if (result is None or "session" not in result):
             self.fail("Failed to start session %s" % result)
         session = result["session"]
-        
+
         ''' check the status '''
-        result = service.get_session_status(session)
+        result = te.get_plugin_service_session_status(service_name, session)
         if (result["status"] is not MinionPlugin.STATUS_PENDING):
             self.fail("Unexpected session state %s" % result)
             
         ''' Should fail - invalid state '''
-        result = service.set_session_states(session, MinionPlugin.STATE_RESUME)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_RESUME)
         if ( result["status"] is not MinionPlugin.STATUS_FAILED):
             self.fail("Unexpected result - should have failed %s" % result)
 
         ''' Should fail - invalid state '''
-        result = service.set_session_states(session, MinionPlugin.STATE_SUSPEND)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_SUSPEND)
         if ( result["status"] is not MinionPlugin.STATUS_FAILED):
             self.fail("Unexpected result - should have failed %s" % result)
         
         ''' Should fail - invalid state '''
-        result = service.set_session_states(session, MinionPlugin.STATE_TERMINATE)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_TERMINATE)
         if ( result["status"] is not MinionPlugin.STATUS_FAILED):
             self.fail("Unexpected result - should have failed %s" % result)
             
         ''' Should work ok '''
-        result = service.set_session_states(session, MinionPlugin.STATE_START)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_START)
         if ( result["status"] is not MinionPlugin.STATUS_RUNNING):
             self.fail("Unexpected result - should have worked %s" % result)
         
         ''' Should fail - invalid state '''
-        result = service.set_session_states(session, MinionPlugin.STATE_START)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_START)
         if ( result["status"] is not MinionPlugin.STATUS_FAILED):
             self.fail("Unexpected result - should have failed %s" % result)
         
         ''' Should fail - invalid state '''
-        result = service.set_session_states(session, MinionPlugin.STATE_RESUME)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_RESUME)
         if ( result["status"] is not MinionPlugin.STATUS_FAILED):
             self.fail("Unexpected result - should have failed %s" % result)
 
         ''' Should work ok '''
-        result = service.set_session_states(session, MinionPlugin.STATE_SUSPEND)
+        result = te.set_plugin_service_session_states(service_name, session, MinionPlugin.STATE_SUSPEND)
         if ( result["status"] is not MinionPlugin.STATUS_WAITING):
             self.fail("Unexpected result - should have worked %s" % result)
         
-        print "Result from set_session_states:"
-        print result
+        #print "Result from set_session_states:"#
+        #print result
         
         
         ''' start the plugin '''

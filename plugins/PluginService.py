@@ -13,6 +13,12 @@ from TemplatePlugin import TemplatePlugin
 ''' Version allows us to identify and support different versions of the PluginService '''
 VERSION = 1
 
+class PluginServiceError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 class PluginService(object):
     '''
     classdocs
@@ -34,7 +40,7 @@ class PluginService(object):
 
     def create_session(self, plugin_name):
         if (plugin_name not in self.plugins):
-            raise Exception("Unknown plugin", plugin_name)
+            raise PluginServiceError("Unknown plugin %s" % plugin_name)
         plugin = self.plugins[plugin_name]
         session = self.gen_session_key();
         while (session in self.sessions):
@@ -59,7 +65,7 @@ class PluginService(object):
 
     def terminate_session(self, session):
         if (session not in self.sessions):
-            raise Exception("Unknown session", session)
+            raise PluginServiceError("Unknown session %s" % session)
         sess = self.sessions[session]
         sess["plugin"].terminate()
         return { 
@@ -68,19 +74,18 @@ class PluginService(object):
 
     def get_session_status(self, session):
         if (session not in self.sessions):
-            raise Exception("Unknown session", session)
+            raise PluginServiceError("Unknown session %s" % session)
         sess = self.sessions[session]
         return sess["plugin"].status()
 
     def get_session_states(self, session):
         if (session not in self.sessions):
-            raise Exception("Unknown session", session)
+            raise PluginServiceError("Unknown session %s" % session)
         sess = self.sessions[session]
-        ''' TODO dont call do_ methods '''
         return sess["plugin"].validStates()
 
-    def set_session_states(self, session, state):
+    def set_session_state(self, session, state):
         if (session not in self.sessions):
-            raise Exception("Unknown session", session)
+            raise PluginServiceError("Unknown session %s" % session)
         sess = self.sessions[session]
         return sess["plugin"].changeState(state)
