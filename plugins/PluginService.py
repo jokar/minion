@@ -24,19 +24,41 @@ class PluginService(object):
     classdocs
     '''
     ''' Probbly the server name, but can be anything that identifies this service '''
-    name = ''
-    sessions = {}
     ''' TODO: how to load plugins dynamically? '''
-    plugins = { "TemplatePlugin" : TemplatePlugin }
 
     def __init__(self, name):
         '''
         Constructor
         '''
         self.name = name
+        self.sessions = {}
+        self.plugins = { "TemplatePlugin" : TemplatePlugin }
+
+    def set_plugins(self, plugins):
+        self.plugins = plugins
         
     def gen_session_key(self):
         return ''.join('%02x' % ord(x) for x in os.urandom(16))
+
+    def get_plugins(self):
+        p = []
+        for plugin in self.plugins:
+            p.append({ "plugin" : plugin, "version" : self.plugins[plugin].VERSION, "type" : self.plugins[plugin].TYPE })
+        return { 'plugins' : p }
+    
+    def get_plugin_template(self, plugin_name):
+        if (plugin_name not in self.plugins):
+            raise PluginServiceError("Unknown plugin %s" % plugin_name)
+        plugin = self.plugins[plugin_name]
+        ''' TODO: this the right way to do it?? '''
+        return plugin().getTemplate()
+
+    def get_plugin_config(self, plugin_name):
+        if (plugin_name not in self.plugins):
+            raise PluginServiceError("Unknown plugin %s" % plugin_name)
+        plugin = self.plugins[plugin_name]
+        ''' TODO: this the right way to do it?? '''
+        return plugin().getConfig()
 
     def create_session(self, plugin_name):
         if (plugin_name not in self.plugins):
@@ -50,6 +72,12 @@ class PluginService(object):
                 "session" : session, 
                 "message" : "Created new session for plugin '%s'" % plugin_name }
     
+    def set_plugin_config(self, session, config):
+        if (session not in self.sessions):
+            raise PluginServiceError("Unknown session %s" % session)
+        sess = self.sessions[session]
+        sess["plugin"].setConfig(config)
+
     def get_info(self):
         return {"name" : self.name, "version" : VERSION}
     
@@ -89,3 +117,9 @@ class PluginService(object):
             raise PluginServiceError("Unknown session %s" % session)
         sess = self.sessions[session]
         return sess["plugin"].changeState(state)
+
+    def get_session_results(self, session):
+        if (session not in self.sessions):
+            raise PluginServiceError("Unknown session %s" % session)
+        sess = self.sessions[session]
+        return sess["plugin"].getResults()

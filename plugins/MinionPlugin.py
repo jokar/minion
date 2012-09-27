@@ -30,8 +30,19 @@ def setKey(collection, key, value, force=False):
             ptr[path[0]] = {}
     raise Exception("Path not found")
 
-class MinionPlugin:
+class MinionPluginError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
 
+class MinionPlugin:
+    PLUGIN_TYPE_ABSTRACT = "Abstract"   # Should just used by this class
+    PLUGIN_TYPE_WEBAPP = "WebApp"
+
+    TYPE = PLUGIN_TYPE_ABSTRACT
+    VERSION = 1
+    
     STATUS_PENDING = "PENDING"
     STATUS_WAITING = "WAITING"
     STATUS_RUNNING = "RUNNING"
@@ -53,25 +64,66 @@ class MinionPlugin:
     def create_std_status(self, success, status):
         return { "success" : success, "message" : "TBA", "status" : status} 
 
+    def create_status_plus(self, success, message, status, plus):
+        s = self.create_status(success, message, status)
+        s.update(plus)
+        return s
+
     default = { }
     def __init__(self, default):
-        self.configuration = deepcopy(self.__class__.default)
+        self.template = deepcopy(self.__class__.default)
+        #self.configuration = deepcopy(self.__class__.default)
+        self.configuration = {}
 
 
     def resetConfig(self):
-        self.configuration = deepcopy(self.__class__.default)    
+        #self.configuration = deepcopy(self.__class__.default)    
+        self.configuration = {}    
+
+    def getTemplate(self):
+        return self.template
+
+    def getTemplateForKey(self, key):
+        for tkey in self.template["template"]:
+            if tkey is key:
+                return self.template["template"][key]
+        return None
 
     def getConfig(self):
         return self.configuration
 
     def setConfig(self, config):
         if (self.status()["status"] != MinionPlugin.STATUS_PENDING):
-            raise("Cannot configure a plugin once execution has started.")
+            raise MinionPluginError("Cannot configure a plugin once execution has started.")
         #XXX - Extension Point - do_validate(config), return True|False
-        if (self.do_validate(config)):
+        if (self.validateConfig(config)):
             self.configuration = config
         else:
-            raise ("Invalid configuration exception.")
+            raise MinionPluginError("Invalid configuration exception.")
+
+    def validateConfig(self, config):
+        ''' first check each value is in the template '''
+        for ckey in config:
+            self.validateKey(ckey, config[ckey])
+        ''' now check for missing 'required' values '''
+        for tkey in self.template["template"]:
+            if tkey not in config:
+                raise MinionPluginError("Missing key %s" % tkey)
+            
+        return self.do_validate_config(config)
+        
+    def do_validate_config(self, config):
+        ''' first check each value is in the template '''
+        for ckey in config:
+            self.validateKey(ckey, config[ckey])
+        return True
+
+    def validateKey(self, key, value):
+        ''' first check each value is in the template '''
+        tmp = self.getTemplateForKey(key)
+        if tmp is None:
+            raise MinionPluginError("Unknown key %s" % key)
+        return self.do_validate_key(key, value)
 
     def getValue(self, key):
         try:
@@ -81,13 +133,9 @@ class MinionPlugin:
 
     def setValue(self, key, value):
         if (self.status()["status"] != MinionPlugin.STATUS_PENDING):
-            raise("Cannot configure a plugin once execution has started.")
-        try:
-            #XXX - Extension Point do_validate_key(key, value), return True|False
-            if (self.do_validate_key(key, value)):
-                return setKey(self.configuration, key, value, "force")  # TODO: whats this??
-        except:
-            return False
+            raise MinionPluginError("Cannot configure a plugin once execution has started.")
+        if (self.validateKey(key, value)):
+            return setKey(self.configuration, key, value, True)
 
 
     def status(self):
@@ -101,6 +149,7 @@ class MinionPlugin:
     def start(self):        
         try:        
             if (self.canEnterState(self.STATE_START)):
+                self.validateConfig(self.getConfig())
                 #XXX - Extension Point - do_start(), return create_status()
                 self.do_start()
                 query = self.status()
@@ -150,7 +199,7 @@ class MinionPlugin:
     def canEnterState(self, state):
         try:
             if not state in self.STATES:
-                raise("Invalid state %s" % state)
+                raise MinionPluginError("Invalid state %s" % state)
             #XXX - Extension Point - do_get_states() : return [] containing available states
             states = self.do_get_states()
             return state in states
@@ -170,7 +219,8 @@ class MinionPlugin:
         elif (state is self.STATE_TERMINATE):
             return self.terminate()
         else:
-            raise("Invalid state %s" % state)
+            raise MinionPluginError("Invalid state %s" % state)
         
-            
-            
+    def getResults(self):
+        return self.do_get_results()
+        
