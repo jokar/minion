@@ -2,17 +2,23 @@
 
 {% block content %}
     <h1>New Scan</h1>
-    <form method="POST" action="">
-        <div id="new_scan_enter_url">
-            <input id="new_scan_url_input" type="text" placeholder="Enter URL to scan..."/><br/>
-            Start Scan
-        </div>
-        <div id="new_scan_advanced_options">
-            <div id="new_scan_advanced_options_expander">
-                Additional Options
+    {% if url_entered %}
+        <p>Now scanning: {{url_entered}}...</p>
+    {% else %}
+        <form method="POST" action="">
+            <div id="new_scan_enter_url">
+                <input name="new_scan_url_input" id="new_scan_url_input" type="text" placeholder="Enter URL to scan..."/><br/>
+                <input type="submit" value="Start Scan" />
             </div>
-        </div>
-    </form>
+            <div id="new_scan_advanced_options">
+                <div id="new_scan_advanced_options_expander">
+                    Additional Options (coming soon!)
+                </div>
+            </div>
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        </form>
+    {% endif %}
+
 {% endblock %}
 
 {% block footer %}

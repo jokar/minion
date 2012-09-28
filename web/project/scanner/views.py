@@ -10,7 +10,7 @@ from funfactory.log import log_cef
 from mobility.decorators import mobile_template
 from session_csrf import anonymous_csrf
 
-
+from django.core.context_processors import csrf
 log = commonware.log.getLogger('playdoh')
 
 
@@ -22,9 +22,15 @@ def home(request, template=None):
 
 @mobile_template('scanner/{mobile/}newscan.html')
 def newscan(request, template=None):
-    """Initiating a new scan"""
-    data = {}  # You'd add data here that you're sending to the template.
-    return render(request, template, data)
+    #Page has been POSTED to
+    if request.method == 'POST':
+        url_entered = request.POST["new_scan_url_input"]
+        data = {"url_entered":url_entered}
+        return render(request, template, data)
+    #Page has not been posted to
+    else:
+        data = {}  # You'd add data here that you're sending to the template.
+        return render(request, template, data)
 
 @anonymous_csrf
 def bleach_test(request):

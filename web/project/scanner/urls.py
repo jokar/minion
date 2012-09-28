@@ -2,7 +2,6 @@ from django.conf.urls.defaults import *
 
 from . import views
 
-
 urlpatterns = patterns('',
     url(r'^$', views.home, name='scanner.home'),
     url(r'^new$', views.newscan, name='scanner.newscan'),
