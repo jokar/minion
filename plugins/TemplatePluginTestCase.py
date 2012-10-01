@@ -14,9 +14,10 @@ class TemplatePluginTestCase(unittest.TestCase):
         if (result.get("status") != expected):
             self.fail("Expected " + expected + " got " + result.get("status") )
 
-    def testStandardRunName(self):
+    def testBasicStateChanges(self):
         plugin = TemplatePlugin()
         self.check_result(plugin.status(), MinionPlugin.STATUS_PENDING);
+        plugin.setConfig({"target" : "http://localhost"})
         plugin.start()
         self.check_result(plugin.status(), MinionPlugin.STATUS_RUNNING);
         plugin.suspend()
@@ -26,9 +27,58 @@ class TemplatePluginTestCase(unittest.TestCase):
         plugin.terminate()
         self.check_result(plugin.status(), MinionPlugin.STATUS_CANCELLED);
 
-    def testFail(self):
-        #self.fail("Failed");
-        pass
+    def testConfigs(self):
+        print TemplatePlugin.default
+        plugin = TemplatePlugin()
+        plugin.setValue("target", "http://localhost")
+        if plugin.getValue("target") is not "http://localhost":
+            self.fail("Unexpected value %s" % plugin.getValue("target"))
+        try:
+            plugin.setValue("badkey", "whatever")
+            self.fail("Expected key to fail")
+        except:
+            pass
+        try:
+            plugin.setConfig({})
+            self.fail("Expected key to fail")
+        except:
+            pass
+        try:
+            plugin.setConfig({"badkey" : "whatever"})
+            self.fail("Expected key to fail")
+        except:
+            pass
+        
+        plugin.setConfig({"target" : "http://localhost"})
+        plugin.resetConfig()
+        try:
+            plugin.validateConfig({})
+            self.fail("Expected to fail")
+        except:
+            pass
+        
+    def testFakeResults(self):
+        plugin = TemplatePlugin()
+        self.check_result(plugin.status(), MinionPlugin.STATUS_PENDING);
+        plugin.setConfig({"target" : "http://localhost"})
+        plugin.start()
+        results = plugin.getResults()
+        print results
+
+        print plugin.status()
+        print plugin.status()
+        results = plugin.getResults()
+        print results
+
+        print plugin.status()
+        print plugin.status()
+        results = plugin.getResults()
+        print results
+
+        print plugin.status()
+        print plugin.status()
+        results = plugin.getResults()
+        print results
 
 
 if __name__ == "__main__":
